@@ -384,6 +384,7 @@
     }
   }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 </head>
 <body>
 
@@ -983,27 +984,24 @@ function handleSubmit(){
 }
 
 // This is the one place to edit when connecting a real backend.
-// Currently wired up for Google Sheets — paste your deployed
-// Apps Script web app URL below.
-const GOOGLE_SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxabM1ENb0YvOodbIFGfEyBGR_hTU2dnbOwclfJ6cGE_zpMnVOFlCUBSzO7pGX4cnq3VA/exec";
+// Currently wired up for EmailJS — every submission arrives as an email.
+const EMAILJS_PUBLIC_KEY  = "NFhvoHFR4I68qM1n6";
+const EMAILJS_SERVICE_ID  = "service_yn9fl8z";
+const EMAILJS_TEMPLATE_ID = "template_9mwhelb";
+
+emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
 
 function sendToDatabase(payload){
   console.log("Rubique quiz submission:", payload);
 
-  if(!GOOGLE_SHEET_WEB_APP_URL || GOOGLE_SHEET_WEB_APP_URL === "PASTE_YOUR_WEB_APP_URL_HERE"){
-    console.warn("No Google Sheet connected yet — see setup steps. Response was only logged above, not saved.");
-    return;
-  }
+  const message = Object.entries(payload)
+    .map(([key, value]) => `${key}: ${value === undefined || value === null || value === "" ? "-" : value}`)
+    .join("\n");
 
-  // "no-cors" + text/plain avoids a failed CORS preflight against
-  // Apps Script (Apps Script web apps don't handle OPTIONS requests).
-  // We won't get a readable response back, but the row still saves.
-  fetch(GOOGLE_SHEET_WEB_APP_URL, {
-    method: "POST",
-    mode: "no-cors",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify(payload),
-  }).catch(err => console.error("Could not reach the Google Sheet:", err));
+  emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+    message: message,
+    phone: payload.phone || "-",
+  }).catch(err => console.error("Could not send quiz email:", err));
 }
 
 function buildPayload(){
