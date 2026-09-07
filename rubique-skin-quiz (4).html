@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Rubique — Let's Talk Skin</title>
+<meta name="description" content="Tell Rubique about your skin. A fun, fast skincare experience — not a survey." />
+
+<!--
+  ============================================================
+  RUBIQUE SKIN QUIZ — single file build (HTML + CSS + JS)
+  ============================================================
+  HOW THIS FILE IS ORGANIZED (for whoever edits this later):
+    1. <style>   — all visual design (colors, fonts, layout, components)
+    2. <body>    — just one empty <div id="app"></div>. Every screen is
+                   rendered into it by JavaScript. There is no other HTML
+                   to hand-edit — copy is edited in the DATA section below.
+    3. <script>  — split into four parts:
+         a. DATA        — every question, option and piece of copy lives
+                           here. Edit copy/options here, nothing else.
+         b. STATE        — the `answers` object. This is exactly what
+                           gets saved when someone finishes the quiz.
+         c. ENGINE       — generic render functions. You shouldn't need
+                           to touch this unless you're adding a new
+                           *type* of question.
+         d. SUBMIT LOGIC — validation, the "one reward per phone number"
+                           check, and sendToDatabase() — the one function
+                           to edit when you're ready to connect a real
+                           backend (Google Sheets / Airtable / Supabase /
+                           Firebase / your own API).
+  ============================================================
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    /* ---- color tokens ---- */
+    --cream:        #FBF3ED;
+    --cream-deep:   #F3E2D6;
+    --white:        #FFFFFF;
+    --pink:         #EBB0B8;
+    --pink-soft:    #F7DCE0;
+    --pink-deep:    #C97D89;
+    --rose-ink:     #5A3A3E;
+    --ink:          #3E2E30;
+    --muted:        #8C7377;
+    --sage:         #94A97E;
+    --sage-soft:    #E4EADC;
+    --line:         #EAD9CD;
+    --shadow:       0 18px 40px -20px rgba(90, 58, 62, 0.35);
+
+    /* ---- type ---- */
+    --display: "Fraunces", serif;
+    --body: "Sora", sans-serif;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    font-family:var(--body);
+    color:var(--ink);
+    background:var(--cream);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  h1,h2,h3{ font-family:var(--display); margin:0; font-weight:600; color:var(--rose-ink); }
+  p{ margin:0; }
+  button{ font-family:var(--body); cursor:pointer; }
+  textarea, input{ font-family:var(--body); }
+  a{ color:inherit; }
+
+  ::selection{ background:var(--pink); color:var(--white); }
+
+  :focus-visible{
+    outline:2.5px solid var(--pink-deep);
+    outline-offset:3px;
+    border-radius:8px;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:0.001ms !important; transition-duration:0.001ms !important; }
+  }
+
+  /* ---------------------------------------------------------
+     PAGE SHELL — a centered "phone" column even on desktop,
+     because almost every visitor arrives from an Instagram
+     link on their phone. Soft blobs live behind it.
+  --------------------------------------------------------- */
+  .stage{
+    position:relative;
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    align-items:stretch;
+    overflow:hidden;
+  }
+  .bg-blob{
+    position:absolute;
+    border-radius:50%;
+    filter:blur(2px);
+    opacity:0.55;
+    pointer-events:none;
+  }
+  .bg-blob.b1{ width:320px; height:320px; top:-120px; left:-100px; background:radial-gradient(circle at 30% 30%, var(--pink-soft), transparent 70%); }
+  .bg-blob.b2{ width:380px; height:380px; bottom:-160px; right:-140px; background:radial-gradient(circle at 60% 40%, var(--cream-deep), transparent 70%); }
+  .bg-blob.b3{ width:200px; height:200px; top:40%; right:-90px; background:radial-gradient(circle at 50% 50%, var(--sage-soft), transparent 70%); opacity:0.4; }
+
+  .frame{
+    position:relative;
+    width:100%;
+    max-width:480px;
+    min-height:100vh;
+    background:transparent;
+    display:flex;
+    flex-direction:column;
+    padding:20px 20px 32px;
+  }
+
+  /* ---------------------------------------------------------
+     TOP BAR — wordmark / back arrow + progress
+  --------------------------------------------------------- */
+  .topbar{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    min-height:40px;
+    margin-bottom:18px;
+  }
+  .wordmark{
+    font-family:var(--display);
+    font-size:1.15rem;
+    font-weight:700;
+    color:var(--pink-deep);
+    letter-spacing:0.01em;
+  }
+  .back-btn{
+    width:36px; height:36px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:var(--white);
+    display:flex; align-items:center; justify-content:center;
+    color:var(--rose-ink);
+    flex-shrink:0;
+    transition:transform 0.15s ease, background 0.15s ease;
+  }
+  .back-btn:hover{ background:var(--pink-soft); transform:translateX(-2px); }
+
+  .progress-wrap{ flex:1; display:flex; flex-direction:column; gap:5px; }
+  .progress-label{ font-size:0.72rem; color:var(--muted); font-weight:600; }
+  .progress-track{
+    height:6px; border-radius:99px; background:var(--pink-soft); overflow:hidden;
+  }
+  .progress-fill{
+    height:100%; border-radius:99px;
+    background:linear-gradient(90deg, var(--pink-deep), var(--pink));
+    transition:width 0.5s cubic-bezier(.65,0,.35,1);
+  }
+
+  /* ---------------------------------------------------------
+     SCREEN CONTENT
+  --------------------------------------------------------- */
+  .screen{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    animation:rise 0.45s cubic-bezier(.2,.8,.2,1);
+  }
+  @keyframes rise{
+    from{ opacity:0; transform:translateY(14px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
+  .eyebrow-emoji{ font-size:2rem; margin-bottom:10px; display:block; }
+  .headline{ font-size:1.65rem; line-height:1.25; margin-bottom:10px; }
+  .subtext{ font-size:0.98rem; color:var(--muted); line-height:1.55; margin-bottom:22px; }
+
+  /* option cards */
+  .options{ display:flex; flex-direction:column; gap:10px; margin-bottom:8px; }
+  .option{
+    text-align:left;
+    background:var(--white);
+    border:1.5px solid var(--line);
+    border-radius:18px;
+    padding:15px 16px;
+    font-size:0.98rem;
+    color:var(--ink);
+    line-height:1.4;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    transition:border-color 0.15s ease, transform 0.12s ease, background 0.15s ease;
+  }
+  .option:hover{ border-color:var(--pink); transform:translateY(-1px); }
+  .option:active{ transform:translateY(0px) scale(0.99); }
+  .option.selected{
+    background:linear-gradient(180deg, var(--pink-soft), #F9E4E8);
+    border-color:var(--pink-deep);
+    color:var(--rose-ink);
+    font-weight:600;
+  }
+  .option .tick{
+    width:20px; height:20px; border-radius:50%;
+    border:1.5px solid var(--line);
+    flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    font-size:0.7rem;
+    color:var(--white);
+    transition:all 0.15s ease;
+  }
+  .option.selected .tick{ background:var(--pink-deep); border-color:var(--pink-deep); }
+
+  .hint-chip{
+    display:inline-block;
+    align-self:flex-start;
+    background:var(--sage-soft);
+    color:#4C5A3D;
+    font-size:0.74rem;
+    font-weight:600;
+    padding:5px 12px;
+    border-radius:99px;
+    margin-bottom:14px;
+  }
+
+  textarea.field{
+    width:100%;
+    min-height:130px;
+    resize:vertical;
+    border:1.5px solid var(--line);
+    border-radius:18px;
+    padding:14px 16px;
+    font-size:0.98rem;
+    background:var(--white);
+    color:var(--ink);
+    line-height:1.5;
+  }
+  textarea.field::placeholder{ color:#B7A6A9; }
+
+  input.field{
+    width:100%;
+    border:1.5px solid var(--line);
+    border-radius:14px;
+    padding:13px 15px;
+    font-size:0.95rem;
+    background:var(--white);
+    color:var(--ink);
+    margin-bottom:14px;
+  }
+  input.field::placeholder{ color:#B7A6A9; }
+
+  .field-label{ font-size:0.82rem; font-weight:600; color:var(--rose-ink); margin-bottom:6px; display:block; }
+
+  .other-input-wrap{ margin-top:2px; margin-bottom:8px; }
+
+  .consent-row{
+    display:flex; align-items:flex-start; gap:10px;
+    background:var(--white);
+    border:1.5px solid var(--line);
+    border-radius:16px;
+    padding:14px;
+    margin-bottom:18px;
+    font-size:0.86rem;
+    color:var(--ink);
+    line-height:1.45;
+  }
+  .consent-row input{ margin-top:3px; width:17px; height:17px; accent-color:var(--pink-deep); flex-shrink:0; }
+
+  .char-note{ font-size:0.76rem; color:var(--muted); margin-top:-4px; margin-bottom:14px; }
+
+  .spacer{ flex:1; min-height:14px; }
+
+  /* CTA buttons */
+  .cta{
+    width:100%;
+    border:none;
+    border-radius:16px;
+    padding:16px 18px;
+    font-size:1rem;
+    font-weight:700;
+    background:var(--pink-deep);
+    color:var(--white);
+    box-shadow:var(--shadow);
+    transition:transform 0.12s ease, opacity 0.15s ease, background 0.15s ease;
+  }
+  .cta:hover{ transform:translateY(-1px); background:#B96C79; }
+  .cta:disabled{ opacity:0.4; cursor:not-allowed; transform:none; box-shadow:none; }
+
+  .cta-ghost{
+    width:100%;
+    border:1.5px solid var(--line);
+    border-radius:16px;
+    padding:14px 18px;
+    font-size:0.92rem;
+    font-weight:600;
+    background:transparent;
+    color:var(--rose-ink);
+    margin-top:10px;
+  }
+  .cta-ghost:hover{ background:var(--white); }
+
+  .skip-link{
+    text-align:center;
+    font-size:0.84rem;
+    color:var(--muted);
+    text-decoration:underline;
+    margin-top:12px;
+    background:none; border:none; font-weight:600;
+  }
+
+  /* ---------------------------------------------------------
+     LANDING
+  --------------------------------------------------------- */
+  .landing-hero{
+    display:flex; flex-direction:column; align-items:center;
+    text-align:center; padding-top:6px;
+  }
+  .drop-illustration{ width:190px; height:190px; margin-bottom:10px; }
+  .landing-hero h1{ font-size:2.1rem; line-height:1.15; margin-bottom:14px; }
+  .landing-hero .lead{ font-size:1.02rem; color:var(--ink); line-height:1.55; margin-bottom:10px; max-width:36ch; }
+  .landing-hero .support{ font-size:0.9rem; color:var(--muted); line-height:1.55; margin-bottom:22px; max-width:38ch; }
+
+  .offer-card{
+    width:100%;
+    background:linear-gradient(155deg, #FCEFE0, #F8E0C8);
+    border:1.5px solid #EBCFA0;
+    border-radius:20px;
+    padding:18px 18px;
+    margin-bottom:22px;
+    text-align:left;
+  }
+  .offer-card .offer-title{ font-family:var(--display); font-weight:700; font-size:1.15rem; color:#7A4E1E; margin-bottom:6px; }
+  .offer-card p{ font-size:0.88rem; color:#7A5C36; line-height:1.5; }
+  .offer-card .offer-fine{ font-size:0.74rem; color:#9C7A45; margin-top:8px; }
+
+  .trust-row{ display:flex; gap:14px; margin-top:18px; font-size:0.76rem; color:var(--muted); }
+  .trust-row span{ display:flex; align-items:center; gap:5px; }
+
+  /* ---------------------------------------------------------
+     RESULTS
+  --------------------------------------------------------- */
+  .result-badge{
+    align-self:center;
+    background:var(--pink-deep);
+    color:var(--white);
+    font-family:var(--display);
+    font-weight:700;
+    font-size:1.4rem;
+    padding:20px 22px;
+    border-radius:24px;
+    text-align:center;
+    margin-bottom:18px;
+    box-shadow:var(--shadow);
+    line-height:1.3;
+  }
+  .result-desc{ text-align:center; font-size:0.98rem; color:var(--ink); line-height:1.6; margin-bottom:22px; }
+  .thanks-block{
+    background:var(--white);
+    border:1.5px solid var(--line);
+    border-radius:18px;
+    padding:18px;
+    text-align:center;
+    margin-bottom:18px;
+  }
+  .thanks-block .big{ font-family:var(--display); font-size:1.3rem; margin-bottom:6px; color:var(--rose-ink); }
+  .thanks-block p{ font-size:0.9rem; color:var(--muted); line-height:1.5; }
+
+  footer.site-footer{
+    text-align:center; padding-top:28px; font-size:0.78rem; color:var(--muted);
+  }
+  footer.site-footer .fw{ font-family:var(--display); font-weight:700; color:var(--pink-deep); }
+  footer.site-footer a{ text-decoration:underline; }
+
+  @media (min-width:540px){
+    .stage{ align-items:center; padding:36px 0; }
+    .frame{
+      min-height:auto;
+      border-radius:32px;
+      background:var(--white);
+      box-shadow:0 40px 90px -40px rgba(90,58,62,0.45);
+      padding:26px 28px 34px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="bg-blob b1"></div>
+  <div class="bg-blob b2"></div>
+  <div class="bg-blob b3"></div>
+  <div class="frame" id="frame">
+    <div class="topbar" id="topbar"></div>
+    <div id="app"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   PART A — DATA
+   Every question, option and headline lives here. Edit copy
+   and options in this section only.
+============================================================ */
+
+// The 9 opening skin-concern options (letters map to branches below)
+const MAIN_CONCERNS = [
+  { key:"A", label:"Breakouts / pimples" },
+  { key:"B", label:"Dark spots / uneven-looking skin" },
+  { key:"C", label:"Dry or flaky skin" },
+  { key:"D", label:"Oily skin" },
+  { key:"E", label:"Dull-looking skin" },
+  { key:"F", label:"Sensitive / easily irritated skin" },
+  { key:"G", label:"I don't know what my skin needs" },
+  { key:"H", label:"I don't really have a problem — I just enjoy skincare" },
+  { key:"I", label:"I want to glow / maintain healthy-looking skin" },
+];
+
+// Each branch has two follow-up questions, shown only to people
+// who picked that concern.
+const BRANCHES = {
+  A: {
+    persona:"BREAKOUT BOSS",
+    personaLine:"You're done letting breakouts run the show — you just want a routine that actually keeps up with you.",
+    q1:{ headline:"What bothers you most about breakouts?", options:[
+      "They keep coming back","They leave marks behind","My skin gets oily",
+      "I don't know what products to use","I feel less confident when I break out","Something else"
+    ]},
+    q2:{ headline:"What have you tried so far?", options:[
+      "Nothing yet","Home remedies","Products from social media",
+      "Products recommended by someone","I've tried several things"
+    ]},
+  },
+  B: {
+    persona:"EVEN-TONE IN PROGRESS",
+    personaLine:"You're not chasing perfect — you just want your skin tone to feel more like... you, evenly.",
+    q1:{ headline:"What would you most like to improve?", options:[
+      "The appearance of dark spots","Uneven-looking skin tone","Marks left after breakouts",
+      "My skin just looks dull","I don't know what is causing it"
+    ]},
+    q2:{ headline:"What usually makes you choose a skincare product?", options:[
+      "Reviews","Recommendation","Ingredients","Price","Before/after content","Packaging 😂"
+    ]},
+  },
+  C: {
+    persona:"HYDRATION HUNTER",
+    personaLine:"Your skin is asking for moisture and you are ON the mission to find what actually works.",
+    q1:{ headline:"What does your skin feel like most of the time?", options:[
+      "Tight after washing","Flaky","Rough","Dry only sometimes","I don't really know"
+    ]},
+    q2:{ headline:"What have you tried to help?", options:[
+      "Moisturizers","Oils","Body products on my face","Home remedies","Nothing yet","Random products TikTok recommended 😭"
+    ]},
+  },
+  D: {
+    persona:"SHINE CONTROLLER",
+    personaLine:"You're not anti-glow, you're anti-oil-slick by 2pm. Balance is the whole point.",
+    q1:{ headline:"What bothers you most about oily skin?", options:[
+      "My face gets shiny quickly","I get frequent breakouts","My makeup doesn't stay",
+      "My pores look noticeable","I don't actually mind it","I don't know what products to use"
+    ]},
+    q2:{ headline:"What kind of products do you normally look for?", options:[
+      "Oil-control products","Lightweight products","Products for breakouts","Products that make my skin look fresh","I have no idea 😂"
+    ]},
+  },
+  E: {
+    persona:"RADIANCE SEEKER",
+    personaLine:"You're not looking for a full transformation — just that lit-from-within look back.",
+    q1:{ headline:"When you say your skin looks dull, what do you mean?", options:[
+      "It looks tired","It lacks radiance","My complexion looks uneven","My skin looks dry","I just don't like how it looks lately","I can't explain it 😂"
+    ]},
+    q2:{ headline:"What are you hoping your skincare routine will help you achieve?", options:[
+      "Healthier-looking skin","More even-looking skin","A fresher appearance","Better hydration","More confidence"
+    ]},
+  },
+  F: {
+    persona:"GENTLE GIRLIE",
+    personaLine:"Your skin has opinions and you've learned to listen — you just want products that respect that.",
+    q1:{ headline:"What usually happens when your skin reacts?", options:[
+      "It feels itchy","It stings","It becomes red","I get bumps","It becomes dry","I'm not sure what triggers it"
+    ]},
+    q2:{ headline:"What makes you nervous about trying a new skincare product?", options:[
+      "I'm scared it will irritate my skin","I don't know which ingredients to avoid","I've had a bad experience before","Products are expensive","I don't know what is suitable for me"
+    ]},
+  },
+  G: {
+    persona:"SKINCARE EXPLORER",
+    personaLine:"You're not confused because you don't care — you're confused because nobody's broken it down simply yet.",
+    q1:{ headline:"Honestly, skincare can be confusing 😂 What confuses you the most?", options:[
+      "Knowing my skin type","Knowing which products to buy","Understanding ingredients","Knowing what order to use products","Knowing what NOT to mix","Everything 😭"
+    ]},
+    q2:{ headline:"If someone could make skincare easier for you, what would you want?", options:[
+      "Simple routines","Product recommendations","Ingredient explanations","Affordable options","Someone to guide me"
+    ]},
+  },
+  H: {
+    persona:"SKINCARE ENTHUSIAST",
+    personaLine:"Skincare isn't a chore for you, it's a whole mood — and honestly, we respect it.",
+    q1:{ headline:"What do you enjoy most about skincare?", options:[
+      "The self-care feeling","Trying new products","Learning about skincare","Having a routine","Seeing changes in my skin","Buying pretty products 😂"
+    ]},
+    q2:{ headline:"What kind of skincare content would you actually enjoy?", options:[
+      "Product reviews","Routines","Skincare education","Self-care content","Funny/relatable skincare content","Product recommendations"
+    ]},
+  },
+  I: {
+    persona:"GLOW SEEKER",
+    personaLine:"Your skincare goal is really about feeling confident and comfortable in your own skin.",
+    q1:{ headline:"What does \u201Cglow\u201D mean to YOU?", options:[
+      "Healthy-looking skin","More radiant-looking skin","Feeling confident","Looking fresh","Maintaining my skin","Looking good for pictures/events 😂"
+    ]},
+    q2:{ headline:"What usually motivates you to take your skincare seriously?", options:[
+      "Seeing changes in my skin","An upcoming event","Feeling confident","Social media","Someone recommended something","I just want to take better care of myself"
+    ]},
+  },
+};
+
+// The buying-behaviour section — general shopping habits, not skin-specific
+const BUYING_STEPS = {
+  discoveryChannels:{
+    type:"multi",
+    emoji:"👀",
+    headline:"When you want to buy a new product, where do you usually discover it?",
+    sub:"Pick as many as apply.",
+    options:["TikTok","Instagram","WhatsApp","Facebook","YouTube","Google/search","Friends/family","I see it in a physical store","Other"],
+  },
+  purchaseMotivators:{
+    type:"multi",
+    emoji:"💭",
+    headline:"What usually makes you interested enough to consider buying something?",
+    options:["A good recommendation","Reviews from other customers","Seeing someone use it","Before/after content","A good price","A discount/offer","The packaging/branding","The product solves a problem I have","I keep seeing it everywhere 😂","Other"],
+  },
+  purchaseDecisionFactors:{
+    type:"single",
+    emoji:"🤔",
+    headline:"Okay, you're interested... what makes you actually BUY?",
+    options:["Price","Reviews","Trust in the seller","Product quality","Convenience","Recommendation","Discount","Availability","Good customer service","I need time to think first 😭"],
+  },
+  purchaseBarriers:{
+    type:"multi",
+    emoji:"🚫",
+    headline:"What would make you NOT buy from a brand?",
+    options:["No reviews","Expensive price","Poor social media presence","No clear product information","Bad customer service","I don't trust the seller","Too many negative reviews","Complicated ordering process","The brand feels fake/unprofessional","Other"],
+  },
+  preferredShoppingChannel:{
+    type:"single",
+    emoji:"🛍️",
+    headline:"How do you prefer to shop?",
+    options:["Instagram DM","WhatsApp","Website","Physical store","Marketplace","I don't mind"],
+  },
+  trustFactors:{
+    type:"multi",
+    emoji:"🤝🏽",
+    headline:"What makes you trust a small/new brand?",
+    options:["Real customer reviews","Seeing the person behind the brand","Educational content","Consistent social media presence","Clear pricing","Professional website","Recommendations from people I trust","Good customer service","Seeing the products clearly","Other"],
+  },
+  onlineShoppingFrustrations:{
+    type:"single",
+    emoji:"😤",
+    headline:"What's your biggest frustration when buying products online?",
+    options:["Delivery","Price","Fake products","Poor communication","Product not looking like the picture","Not knowing what to choose","Payment issues","Sellers not responding","Hidden charges","I've had no major problems"],
+  },
+};
+
+// Playful little acknowledgement lines shown briefly between screens
+const REACTIONS = ["Okayyyy, I see you 👀","Interesting... tell me more.","Now we're getting somewhere 😂","Be brutally honest. We can handle it.","Say less.","We're taking notes 📝"];
+
+/* ============================================================
+   PART B — STATE
+   `answers` is exactly the object we save when the quiz ends.
+============================================================ */
+let answers = {
+  skinConcern:null, skinConcernLabel:null,
+  branchQ1Question:null, branchQ1Answer:null,
+  branchQ2Question:null, branchQ2Answer:null,
+  brandsUnderstand:"",
+  buyingChange:null,
+  discoveryChannels:[], discoveryChannelsOther:"",
+  purchaseMotivators:[], purchaseMotivatorsOther:"",
+  purchaseDecisionFactors:null,
+  purchaseBarriers:[], purchaseBarriersOther:"",
+  preferredShoppingChannel:null,
+  trustFactors:[], trustFactorsOther:"",
+  onlineShoppingFrustrations:null,
+  customerBrandFeedback:"",
+  bestShoppingExperience:"",
+  rubiqueSuggestion:"",
+  additionalFeedback:"",
+  instagram:"", whatsapp:"", phone:"", consent:false,
+};
+
+// The order screens are shown in. Branch steps resolve at runtime
+// based on answers.skinConcern.
+const FLOW = [
+  "q1","branch1","branch2","brandsUnderstand","buyingChange","transition",
+  "discoveryChannels","purchaseMotivators","purchaseDecisionFactors","purchaseBarriers",
+  "preferredShoppingChannel","trustFactors","onlineShoppingFrustrations",
+  "customerBrandFeedback","bestShoppingExperience","rubiqueSuggestion","additionalFeedback",
+  "contact"
+];
+const QUESTION_STEPS = FLOW.filter(id => id !== "transition" && id !== "contact");
+const TOTAL_QUESTIONS = QUESTION_STEPS.length;
+
+let screen = "landing";     // "landing" | "quiz" | "success" | "duplicate"
+let flowIndex = 0;
+let history = [];           // stack of previous flowIndex values, for the back button
+
+const app = document.getElementById("app");
+const topbar = document.getElementById("topbar");
+
+/* ============================================================
+   PART C — ENGINE (generic render functions)
+============================================================ */
+
+function reactionLine(){ return REACTIONS[Math.floor(Math.random()*REACTIONS.length)]; }
+
+function renderTopbar(){
+  if(screen !== "quiz"){ topbar.innerHTML = ""; return; }
+  const stepId = FLOW[flowIndex];
+  const qNumber = QUESTION_STEPS.indexOf(stepId) + 1;
+  let label = "";
+  if(stepId === "transition") label = "Almost halfway 👀";
+  else if(stepId === "contact") label = "Last step 🎁";
+  else label = `Question ${qNumber} of ${TOTAL_QUESTIONS}`;
+
+  const pct = Math.round(((FLOW.indexOf(stepId)+1) / FLOW.length) * 100);
+
+  topbar.innerHTML = `
+    <button class="back-btn" id="backBtn" aria-label="Go back">←</button>
+    <div class="progress-wrap">
+      <span class="progress-label">${label}</span>
+      <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+    </div>
+  `;
+  document.getElementById("backBtn").onclick = goBack;
+  document.getElementById("backBtn").style.visibility = flowIndex === 0 ? "hidden" : "visible";
+}
+
+function goBack(){
+  if(history.length === 0) return;
+  flowIndex = history.pop();
+  renderQuizStep();
+}
+
+function goNext(){
+  history.push(flowIndex);
+  flowIndex++;
+  if(flowIndex >= FLOW.length){ finishQuiz(); return; }
+  renderQuizStep();
+}
+
+function startQuiz(){
+  screen = "quiz";
+  flowIndex = 0;
+  history = [];
+  renderQuizStep();
+}
+
+// ---- option renderers -------------------------------------------------
+
+function optionCard(label, selected){
+  return `<button type="button" class="option ${selected?"selected":""}" data-value="${escapeAttr(label)}">
+    <span>${label}</span><span class="tick">${selected?"✓":""}</span>
+  </button>`;
+}
+
+function escapeAttr(s){ return String(s).replace(/"/g,"&quot;"); }
+
+function needsOther(list, val){ return val === "Other" && (Array.isArray(list) ? list.includes("Other") : list==="Other"); }
+
+// ---- main render dispatcher -------------------------------------------
+
+function renderQuizStep(){
+  renderTopbar();
+  const id = FLOW[flowIndex];
+
+  if(id === "q1") return renderMainConcern();
+  if(id === "branch1") return renderBranchQuestion(1);
+  if(id === "branch2") return renderBranchQuestion(2);
+  if(id === "brandsUnderstand") return renderTextStep({
+    key:"brandsUnderstand", emoji:"👀",
+    headline:"Okay, one last thing about your skin 👀",
+    sub:"What's the biggest thing you wish skincare brands understood about YOU?",
+    placeholder:"Be real with me...",
+    required:true, minLen:4,
+  });
+  if(id === "buyingChange") return renderSingleStep({
+    key:"buyingChange", emoji:"💗",
+    headline:"If you could change ONE thing about buying skincare, what would it be?",
+    options:["Make it more affordable","Make product choices easier","Give clearer information","Give honest recommendations","Make products easier to access","Nothing — I'm happy with how I shop"],
+    required:true,
+  });
+  if(id === "transition") return renderTransition();
+  if(id === "customerBrandFeedback") return renderTextStep({
+    key:"customerBrandFeedback", emoji:"🫶🏽",
+    headline:"Tell me something brands don't understand about you as a customer.",
+    placeholder:"Say it exactly how you'd say it to your friend 👀",
+    required:true, minLen:4,
+  });
+  if(id === "bestShoppingExperience") return renderTextStep({
+    key:"bestShoppingExperience", emoji:"✨",
+    headline:"What's the best shopping experience you've ever had with a small business?",
+    sub:"What made it good?",
+    placeholder:"Type as much or as little as you want...",
+  });
+  if(id === "rubiqueSuggestion") return renderTextStep({
+    key:"rubiqueSuggestion", emoji:"💌",
+    headline:"If Rubique could do ONE thing differently from other skincare brands, what would you want it to be?",
+    placeholder:"We're actually listening...",
+  });
+  if(id === "additionalFeedback") return renderTextStep({
+    key:"additionalFeedback", emoji:"😭",
+    headline:"Last question, promise 😭",
+    sub:"Is there anything else you want Rubique to know?",
+    placeholder:"Optional — say anything",
+  });
+  if(id === "contact") return renderContactStep();
+
+  // buying-behaviour choice steps (data-driven)
+  if(BUYING_STEPS[id]){
+    const step = BUYING_STEPS[id];
+    if(step.type === "multi") return renderMultiStep(id, step);
+    return renderSingleStep({ key:id, emoji:step.emoji, headline:step.headline, sub:step.sub, options:step.options, required:(id==="discoveryChannels") });
+  }
+}
+
+function shell(inner){
+  app.innerHTML = `<div class="screen">${inner}</div>`;
+}
+
+function renderMainConcern(){
+  shell(`
+    <span class="eyebrow-emoji">😭</span>
+    <h2 class="headline">What's your biggest skincare concern right now?</h2>
+    <p class="subtext">No wrong answers — just tell me what's really going on.</p>
+    <div class="options" id="optList">
+      ${MAIN_CONCERNS.map(c => optionCard(c.label, answers.skinConcern===c.key)).join("")}
+    </div>
+    <div class="spacer"></div>
+  `);
+  document.querySelectorAll("#optList .option").forEach((el, i) => {
+    el.onclick = () => {
+      answers.skinConcern = MAIN_CONCERNS[i].key;
+      answers.skinConcernLabel = MAIN_CONCERNS[i].label;
+      goNext();
+    };
+  });
+}
+
+function renderBranchQuestion(which){
+  const branch = BRANCHES[answers.skinConcern];
+  const q = which === 1 ? branch.q1 : branch.q2;
+  const answerKey = which === 1 ? "branchQ1Answer" : "branchQ2Answer";
+  const current = answers[answerKey];
+
+  shell(`
+    <span class="hint-chip">Following up on your last answer</span>
+    <h2 class="headline">${q.headline}</h2>
+    <div class="options" id="optList">
+      ${q.options.map(o => optionCard(o, current===o)).join("")}
+    </div>
+    <div class="spacer"></div>
+  `);
+  document.querySelectorAll("#optList .option").forEach((el, i) => {
+    el.onclick = () => {
+      answers[answerKey] = q.options[i];
+      if(which===1) answers.branchQ1Question = q.headline; else answers.branchQ2Question = q.headline;
+      goNext();
+    };
+  });
+}
+
+function renderTransition(){
+  shell(`
+    <span class="eyebrow-emoji">👀</span>
+    <h2 class="headline">Okay, now let's forget skincare for a second.</h2>
+    <p class="subtext">I want to know how YOU shop — for anything, not just skincare. This part's quick.</p>
+    <div class="spacer"></div>
+    <button class="cta" id="goBtn">Let's go →</button>
+  `);
+  document.getElementById("goBtn").onclick = goNext;
+}
+
+function renderSingleStep({key, emoji, headline, sub, options, required}){
+  const current = answers[key];
+  shell(`
+    ${emoji?`<span class="eyebrow-emoji">${emoji}</span>`:""}
+    <h2 class="headline">${headline}</h2>
+    ${sub?`<p class="subtext">${sub}</p>`:""}
+    <div class="options" id="optList">
+      ${options.map(o => optionCard(o, current===o)).join("")}
+    </div>
+    <div id="otherWrap" class="other-input-wrap"></div>
+    <div class="spacer"></div>
+    ${!required?`<button class="skip-link" id="skipBtn">Skip this one</button>`:""}
+  `);
+  renderOtherInputIfNeeded(key, current);
+  document.querySelectorAll("#optList .option").forEach((el, i) => {
+    el.onclick = () => {
+      answers[key] = options[i];
+      renderOtherInputIfNeeded(key, options[i]);
+      renderSingleStep({key, emoji, headline, sub, options, required}); // re-render to show selection state
+      if(options[i] !== "Other") goNext();
+    };
+  });
+  if(!required){
+    const skip = document.getElementById("skipBtn");
+    if(skip) skip.onclick = () => { answers[key] = answers[key] || null; goNext(); };
+  }
+}
+
+function renderOtherInputIfNeeded(key, value){
+  const wrap = document.getElementById("otherWrap");
+  if(!wrap) return;
+  if(value === "Other"){
+    wrap.innerHTML = `<input class="field" id="otherInput" placeholder="Tell us more..." value="${escapeAttr(answers[key+"Other"]||"")}" />
+      <button class="cta" id="otherNext" style="margin-top:6px;">Continue →</button>`;
+    document.getElementById("otherInput").oninput = (e) => answers[key+"Other"] = e.target.value;
+    document.getElementById("otherNext").onclick = goNext;
+  } else {
+    wrap.innerHTML = "";
+  }
+}
+
+function renderMultiStep(key, step){
+  const selected = answers[key] || [];
+  shell(`
+    <span class="eyebrow-emoji">${step.emoji}</span>
+    <h2 class="headline">${step.headline}</h2>
+    ${step.sub?`<p class="subtext">${step.sub}</p>`:`<p class="subtext">Pick all that apply.</p>`}
+    <div class="options" id="optList">
+      ${step.options.map(o => optionCard(o, selected.includes(o))).join("")}
+    </div>
+    <div id="otherWrap" class="other-input-wrap">
+      ${selected.includes("Other") ? `<input class="field" id="otherInput" placeholder="Tell us more..." value="${escapeAttr(answers[key+"Other"]||"")}" />` : ""}
+    </div>
+    <div class="spacer"></div>
+    <button class="cta" id="nextBtn" ${key==="discoveryChannels" && selected.length===0 ? "disabled":""}>Continue →</button>
+  `);
+  const otherInput = document.getElementById("otherInput");
+  if(otherInput) otherInput.oninput = (e) => answers[key+"Other"] = e.target.value;
+
+  document.querySelectorAll("#optList .option").forEach((el, i) => {
+    el.onclick = () => {
+      const opt = step.options[i];
+      const list = answers[key] || [];
+      const idx = list.indexOf(opt);
+      if(idx > -1) list.splice(idx,1); else list.push(opt);
+      answers[key] = list;
+      renderMultiStep(key, step);
+    };
+  });
+  document.getElementById("nextBtn").onclick = () => {
+    if(key==="discoveryChannels" && (answers[key]||[]).length===0) return;
+    goNext();
+  };
+}
+
+function renderTextStep({key, emoji, headline, sub, placeholder, required, minLen}){
+  const val = answers[key] || "";
+  shell(`
+    <span class="eyebrow-emoji">${emoji||"💭"}</span>
+    <h2 class="headline">${headline}</h2>
+    ${sub?`<p class="subtext">${sub}</p>`:""}
+    <textarea class="field" id="textInput" placeholder="${escapeAttr(placeholder||"Type here...")}">${val}</textarea>
+    ${required ? `<p class="char-note">Just a sentence is perfect 🤍</p>` : ""}
+    <div class="spacer"></div>
+    <button class="cta" id="nextBtn" ${required && val.trim().length < (minLen||1) ? "disabled":""}>Continue →</button>
+    ${!required?`<button class="skip-link" id="skipBtn">Skip this one</button>`:""}
+  `);
+  const box = document.getElementById("textInput");
+  const nextBtn = document.getElementById("nextBtn");
+  box.oninput = (e) => {
+    answers[key] = e.target.value;
+    if(required) nextBtn.disabled = e.target.value.trim().length < (minLen||1);
+  };
+  nextBtn.onclick = goNext;
+  const skip = document.getElementById("skipBtn");
+  if(skip) skip.onclick = () => { answers[key] = ""; goNext(); };
+}
+
+function renderContactStep(){
+  shell(`
+    <span class="eyebrow-emoji">🎁</span>
+    <h2 class="headline">Almost there! Where should your airtime go?</h2>
+    <p class="subtext">One reward per phone number — fill in all three below so we can reach you.</p>
+
+    <label class="field-label" for="phoneInput">Phone number *</label>
+    <input class="field" id="phoneInput" placeholder="e.g. 080XXXXXXXX" value="${escapeAttr(answers.phone)}" inputmode="tel" />
+
+    <label class="field-label" for="igInput">Instagram username *</label>
+    <input class="field" id="igInput" placeholder="@yourhandle" value="${escapeAttr(answers.instagram)}" />
+
+    <label class="field-label" for="waInput">WhatsApp number *</label>
+    <input class="field" id="waInput" placeholder="e.g. 080XXXXXXXX" value="${escapeAttr(answers.whatsapp)}" />
+
+    <label class="consent-row">
+      <input type="checkbox" id="consentBox" ${answers.consent?"checked":""} />
+      <span>Yes, I'd like to receive skincare tips, recommendations and Rubique updates.</span>
+    </label>
+
+    <p id="errMsg" style="color:#B3505C; font-size:0.82rem; margin-bottom:10px; display:none;"></p>
+
+    <div class="spacer"></div>
+    <button class="cta" id="submitBtn">Claim my airtime →</button>
+  `);
+
+  document.getElementById("phoneInput").oninput = e => answers.phone = e.target.value;
+  document.getElementById("igInput").oninput = e => answers.instagram = e.target.value;
+  document.getElementById("waInput").oninput = e => answers.whatsapp = e.target.value;
+  document.getElementById("consentBox").onchange = e => answers.consent = e.target.checked;
+  document.getElementById("submitBtn").onclick = handleSubmit;
+}
+
+/* ============================================================
+   PART D — SUBMIT LOGIC (validation, one-reward gate, "database")
+============================================================ */
+
+function validPhone(phone){
+  const digits = (phone||"").replace(/\D/g,"");
+  return digits.length >= 10 && digits.length <= 14;
+}
+
+function requiredFieldsComplete(){
+  return !!(
+    answers.skinConcern &&
+    answers.branchQ1Answer &&
+    answers.branchQ2Answer &&
+    answers.brandsUnderstand && answers.brandsUnderstand.trim().length >= 4 &&
+    answers.buyingChange &&
+    answers.discoveryChannels && answers.discoveryChannels.length > 0 &&
+    answers.customerBrandFeedback && answers.customerBrandFeedback.trim().length >= 4
+  );
+}
+
+function contactFieldsComplete(){
+  return !!(
+    validPhone(answers.phone) &&
+    answers.instagram && answers.instagram.trim().length > 1 &&
+    validPhone(answers.whatsapp)
+  );
+}
+
+// NOTE ON THE REWARD CHECK:
+// This demo enforces "one reward per phone number" using localStorage,
+// which lives only in this browser. It's enough to demonstrate the UX
+// and the exact rule to enforce, but it can be cleared or bypassed by a
+// visitor. When you connect a real backend (see sendToDatabase below),
+// move this same phone-number check server-side so it can't be gamed.
+function phoneAlreadyClaimed(phone){
+  const used = JSON.parse(localStorage.getItem("rubique_claimed_phones") || "[]");
+  return used.includes(phone.replace(/\D/g,""));
+}
+function markPhoneClaimed(phone){
+  const used = JSON.parse(localStorage.getItem("rubique_claimed_phones") || "[]");
+  used.push(phone.replace(/\D/g,""));
+  localStorage.setItem("rubique_claimed_phones", JSON.stringify(used));
+}
+
+function handleSubmit(){
+  const errEl = document.getElementById("errMsg");
+  errEl.style.display = "none";
+
+  if(!contactFieldsComplete()){
+    errEl.textContent = "Please fill in your phone number, Instagram username, and WhatsApp number — all three are needed 👀";
+    errEl.style.display = "block";
+    return;
+  }
+  if(!requiredFieldsComplete()){
+    errEl.textContent = "Looks like a couple of earlier questions got skipped — go back and finish those up first.";
+    errEl.style.display = "block";
+    return;
+  }
+  if(phoneAlreadyClaimed(answers.phone)){
+    finishQuiz(true);
+    return;
+  }
+
+  markPhoneClaimed(answers.phone);
+  sendToDatabase(buildPayload());
+  finishQuiz(false);
+}
+
+// This is the one place to edit when connecting a real backend.
+// Currently wired up for Google Sheets — paste your deployed
+// Apps Script web app URL below.
+const GOOGLE_SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxabM1ENb0YvOodbIFGfEyBGR_hTU2dnbOwclfJ6cGE_zpMnVOFlCUBSzO7pGX4cnq3VA/exec";
+
+function sendToDatabase(payload){
+  console.log("Rubique quiz submission:", payload);
+
+  if(!GOOGLE_SHEET_WEB_APP_URL || GOOGLE_SHEET_WEB_APP_URL === "PASTE_YOUR_WEB_APP_URL_HERE"){
+    console.warn("No Google Sheet connected yet — see setup steps. Response was only logged above, not saved.");
+    return;
+  }
+
+  // "no-cors" + text/plain avoids a failed CORS preflight against
+  // Apps Script (Apps Script web apps don't handle OPTIONS requests).
+  // We won't get a readable response back, but the row still saves.
+  fetch(GOOGLE_SHEET_WEB_APP_URL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(payload),
+  }).catch(err => console.error("Could not reach the Google Sheet:", err));
+}
+
+function buildPayload(){
+  return {
+    id: "rq_" + Date.now(),
+    submittedAt: new Date().toISOString(),
+    skinConcern: answers.skinConcernLabel,
+    branchQ1Question: answers.branchQ1Question,
+    branchQ1Answer: answers.branchQ1Answer,
+    branchQ2Question: answers.branchQ2Question,
+    branchQ2Answer: answers.branchQ2Answer,
+    brandsUnderstand: answers.brandsUnderstand,
+    buyingChange: answers.buyingChange,
+    discoveryChannels: answers.discoveryChannels,
+    discoveryChannelsOther: answers.discoveryChannelsOther,
+    purchaseMotivators: answers.purchaseMotivators,
+    purchaseMotivatorsOther: answers.purchaseMotivatorsOther,
+    purchaseDecisionFactors: answers.purchaseDecisionFactors,
+    purchaseBarriers: answers.purchaseBarriers,
+    purchaseBarriersOther: answers.purchaseBarriersOther,
+    preferredShoppingChannel: answers.preferredShoppingChannel,
+    trustFactors: answers.trustFactors,
+    trustFactorsOther: answers.trustFactorsOther,
+    onlineShoppingFrustrations: answers.onlineShoppingFrustrations,
+    customerBrandFeedback: answers.customerBrandFeedback,
+    bestShoppingExperience: answers.bestShoppingExperience,
+    rubiqueSuggestion: answers.rubiqueSuggestion,
+    additionalFeedback: answers.additionalFeedback,
+    instagram: answers.instagram,
+    whatsapp: answers.whatsapp,
+    phone: answers.phone,
+    consent: answers.consent,
+  };
+}
+
+function finishQuiz(duplicate){
+  screen = duplicate ? "duplicate" : "success";
+  topbar.innerHTML = "";
+  renderResult(duplicate);
+}
+
+/* ============================================================
+   LANDING & RESULT SCREENS
+============================================================ */
+
+function renderLanding(){
+  screen = "landing";
+  topbar.innerHTML = `<span class="wordmark">rubique</span>`;
+  app.innerHTML = `
+    <div class="screen landing-hero">
+      <svg class="drop-illustration" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <ellipse cx="100" cy="150" rx="70" ry="18" fill="#F3E2D6" opacity="0.6"/>
+        <path d="M100 20 C130 70 160 100 160 130 C160 163 133 185 100 185 C67 185 40 163 40 130 C40 100 70 70 100 20 Z" fill="#EBB0B8"/>
+        <path d="M100 45 C122 82 145 105 145 130 C145 154 125 170 100 170 C75 170 55 154 55 130 C55 105 78 82 100 45 Z" fill="#F7DCE0"/>
+        <circle cx="82" cy="118" r="9" fill="#FFFFFF" opacity="0.75"/>
+      </svg>
+      <h1>LET'S TALK<br/>SKIN. 💗</h1>
+      <p class="lead">Forget what skincare brands tell you. I want to know what YOU actually want from your skin.</p>
+      <p class="support">Answer a few fun questions and help Rubique create skincare content and experiences based on what real people actually need.</p>
+
+      <div class="offer-card">
+        <div class="offer-title">🎁 Get airtime</div>
+        <p>Tell us about your skincare habits, shopping habits and what you actually want from brands — it takes about 3–5 minutes. Finish it, drop your details, and get airtime.</p>
+        <p class="offer-fine">One reward per phone number.</p>
+      </div>
+
+      <button class="cta" id="startBtn">I want my airtime →</button>
+      <div class="trust-row">
+        <span>🔒 Answers used for research only</span>
+      </div>
+    </div>
+  `;
+  document.getElementById("startBtn").onclick = startQuiz;
+}
+
+function renderResult(duplicate){
+  const branch = BRANCHES[answers.skinConcern] || BRANCHES.I;
+  app.innerHTML = `
+    <div class="screen">
+      ${duplicate ? `
+        <div class="thanks-block">
+          <div class="big">Looks like this number already claimed its airtime 👀</div>
+          <p>One reward per phone number — but thank you so much for going through everything with us. Here's your skin persona anyway 💗</p>
+        </div>
+      ` : `
+        <div class="thanks-block">
+          <div class="big">🎉 YOU DID IT!</div>
+          <p>Your airtime is loading... 📱<br/>Thank you for helping Rubique understand real customers.</p>
+        </div>
+      `}
+
+      <div class="result-badge">✨ YOU'RE A<br/>${branch.persona}<br/>✨</div>
+      <p class="result-desc">${branch.personaLine}<br/><br/>Rubique gets you. 💗</p>
+
+      <button class="cta" id="igBtn">Follow Rubique on Instagram</button>
+      <button class="cta-ghost" id="exploreBtn">Explore more skincare content</button>
+
+      <footer class="site-footer">
+        <div class="fw">rubique</div>
+        <p>Real skin. Real people. <a href="https://www.instagram.com/rubique2026/" target="_blank" rel="noopener">@rubique on Instagram</a></p>
+      </footer>
+    </div>
+  `;
+  document.getElementById("igBtn").onclick = () => window.open("https://www.instagram.com/rubique2026/","_blank");
+  document.getElementById("exploreBtn").onclick = () => window.open("https://www.instagram.com/rubique2026/","_blank");
+}
+
+/* ============================================================
+   BOOT
+============================================================ */
+renderLanding();
+</script>
+</body>
+</html>
