@@ -985,12 +985,12 @@ function handleSubmit(){
 // This is the one place to edit when connecting a real backend.
 // Currently wired up for Google Sheets — paste your deployed
 // Apps Script web app URL below.
-const GOOGLE_SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwBtoHj1bD0-5q0k9yEtDUd94oJc8LCruUh6hA3hUqqKIdM8M0m1H_uHGUOOH-syF4GDA/exec";
+const GOOGLE_SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxCE-5abdAQqQxFOSAoxoGOAPp8z-Mlohe61v19rLoxJcp31TFQxQUOipVh3Ln2Q1E1KQ/exec";
 
 function sendToDatabase(payload){
   console.log("Rubique quiz submission:", payload);
 
-  if(!GOOGLE_SHEET_WEB_APP_URL || GOOGLE_SHEET_WEB_APP_URL === "PASTE_YOUR_WEB_APP_URL_HERE"){
+  if(!GOOGLE_SHEET_WEB_APP_URL || GOOGLE_SHEET_WEB_APP_URL === "https://script.google.com/macros/s/AKfycbxCE-5abdAQqQxFOSAoxoGOAPp8z-Mlohe61v19rLoxJcp31TFQxQUOipVh3Ln2Q1E1KQ/exec){
     console.warn("No Google Sheet connected yet — see setup steps. Response was only logged above, not saved.");
     return;
   }
